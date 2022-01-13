@@ -1,0 +1,381 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+HW at: <https://github.com/rmcelreath/stat_rethinking_2022/blob/main/homework/week01.pdf>
+
+```{r}
+#library(rethinking)
+library(flextable)
+library(tidyverse)
+library(brms)
+
+```
+
+# (Not HW: Coding the Marble Example)
+
+"Suppose there's a bag, and it contains four marbles. These marbles come in two colors: blue and white. We know there are four marbles in the bag, but we don't know how many there are of each color."
+
+We are going to draw three marbles, with replacement, and based upon what we find out, we are going to make a guess about what the actual distribution of marbles is in the bag. We'll use a Bayesian modeling approach to do this. The approach is like so:
+
+1.  Create a story of how the data might arise - the initial model
+2.  Update the model with gathered data
+3.  Revise the model accordingly
+
+## Step 1
+
+So the nice thing about the marble example is marbles can only be blue and white, and there aren't that many of them, so we can just literally describe all of them, like so:
+
+```{r}
+
+conjectures <- tibble(conjecture = c(1:5),
+                      whites = c(4, 3, 2, 1, 0),
+                      blues = (0:4))
+
+flextable(conjectures)
+
+```
+
+Great. We haven't gathered any data yet, so we don't know the relative likelihood of any of these possibilities ("conjectures"), but these are the possibilities.
+
+## Step 2
+
+So now let's encounter a datum.
+
+The first marble we pull is a blue. (And it's not white!)
+
+So now we can update the model with this data and get some probabilities for each conjecture.
+
+We will write a little function to do this. Recall we are sampling from the bag with replacement so each draw doesn't affect subsequent draws.
+
+If there's 3 blue marbles in the bag, then there's 3 ways to draw a blue, and just 1 way to draw a white.
+
+So if you draw three blues, then the number of ways you could have ended up doing that is:
+
+$3 * 3 * 3 = 3^{3}$
+
+And the number of ways you could draw that one blue is $1^{1}$
+
+And the same logic applies for other combinations.
+
+Thus the generic count of ways is going to be:
+
+$\text{conjectured blues} ^ {\text{observed whites}} * \text{conjectured whites} ^ {\text{observed whites}}$
+
+And then the relative likelihood, or *plausibity*, of any given conjecture is just how many ways it contributes to the total number of ways that are available.
+
+```{r}
+
+update.marbles <- function(num_blues, num_whites, conjectures) {
+  
+  conjectures %>%
+    mutate(ways = blues^num_blues * whites^num_whites,
+             p = round(ways /sum(ways),2))
+  
+  
+}
+
+update.marbles(1, 0, conjectures) %>%
+  flextable()
+```
+
+The example data given in the book is blue, white, blue, and now we can see that the procedure above generates the right number of ways and $p$s for that data.
+
+```{r}
+update.marbles(2, 1, conjectures) %>%
+  flextable()
+```
+
+The vector $p$ here is a distribution of probabilities for each conjecture.
+
+We were able to count the "ways" the data could arise in this case because the color of a ball can take on only two values, and we were just dealing with a small number of balls in the hypothetical bag.
+
+But the counting exercise we did is just a window into the use of a probability distribution, which would scale up even when observations can take on more values, and when we have more observations.
+
+$\text{Posterior} = \frac{\text{Probability of the data} * \text{Prior}} {\text{Average probability of the data}}$
+
+$Pr(p|W,L) = \frac{Pr(W,L|p)Pr(p)} {Pr(W,L)}$
+
+What's going on in here?
+
+### The Posterior Probability
+
+We're solving for the probability of some conjecture, given the observed data (how many blues and whites we observed). So that's $Pr(p|Blues,Whites)$. And that's the **posterior probability**. This will be fed to us as a set of densities (likelihoods) for given values of *p*.
+
+### The data
+
+The probability $p$ of the observed data, given the prior probability under a given conjecture. So that's $Pr(W,L|p)Pr(p)$. This is just the ways we could obtain our data, divided by the total number of ways, like we see in the computation for $p$ above that we did by counting. It so turns out that this is equal to:
+
+$Pr(W,L|p)Pr(p) = \frac{(Blue+White)!}{Blue!White!}p^{Blue}(1-p)^{White}$
+
+What'd we do here?
+
+We add up all the ways we could have observed this number of observations. That's this: $(Blue+White)!$We divide that by the number of ways we could have observed each type separately, $Blue!White!$. What we've got here is $\frac{3!}{2!1!} = \frac{6}{2} = 3$.
+
+Then we multiply that by the prior probability of observing that number of blues ($p^{Blue}$) and whites ($(1-p)^{White}$).
+
+### Prior value
+
+That's just good old $Pr(p)$, the prior probability. In this case it's the relative probability of each explanation.
+
+### Binomial distribution
+
+It turns out this whole thing, $\frac{Pr(W,L|p)Pr(p)} {Pr(W,L)}$ just is the formula for the probability density function with a dichotomous/binomial outcome. So we can use `dbinom()` to compute this in R. What this function returns is the LIKELIHOOD of the prior *p* given the data we've seen.
+
+# (Not HW: Coding Globe Tossing)
+
+Let's run the globe tossing experiment from the book and see if we can come up with the correct posterior values given specific data input.
+
+The key insight to Bayes is this one:
+
+$\text{Posterior} = \frac{\text{Probability of the data} * \text{Prior}} {\text{Average probability of the data}}$
+
+Let's define some of the stuff here.
+
+> **Prior (probability):** The plausibility (likelihood) of a specific value of $p$
+
+Following the book, we'll enter this with a quite naive prior that any percentage $p$ of water of the entire surface of the globe is equally likely. So, for all potential values $p$, the value of the prior should be 1.
+
+We have our data, which consists of a number of observations of water, and a number of observations of land.
+
+We need to compute $\frac{\text{Probability of the data} * \text{Prior}} {\text{Average probability of the data}}$ . We know $\text{Prior}$ is just 1 for all possible values.
+
+So what is $\frac{\text{Probability of the data}} {\text{Average probability of the data}}$ ?
+
+That's basically just the likelihood of observing some number of water and land data points ("ways" of getting those specific data points), divided by the average likelihood for a given combination of water and land observations.
+
+Let's set up our values for each of the above...
+
+We'll do this over a range of possible values of % Earth's surface that's water (using grid approximation, in other words)
+
+```{r}
+
+globe <-
+  tibble(
+    #our values of "p", a % surface that is water
+    `% Water` = seq(0,1,length.out = 20), 
+    
+    # our prior, which is the same for every value of p
+    Prior = rep(1,20), 
+    
+    # density of each value of p given the data
+    # this is where we're getting the likelihood of the data under the prior
+    `Likelihood of % Water Given Data` = dbinom(6, 9, `% Water`), 
+    
+    # posterior likelihood of a given value of p
+    # unstandardized first (i.e., values won't sum to 1)
+    `Unstandardized Posterior` = `Likelihood of % Water Given Data` * Prior,
+    
+    # standardize so values of posterior sum to 1
+    `Standardized Posterior` =  `Unstandardized Posterior` / sum(`Unstandardized Posterior`))
+    
+    
+globe %>%
+  mutate_all(round, 3) %>%
+  flextable()
+
+```
+
+What's the difference between the likelihood of a given value of % Earth that's water under the prior, versus the value of the posterior?
+
+
+
+```{r}
+
+priors <- globe %>%
+  ggplot(aes(x = `% Water`)) +
+  
+  # plot likelihoods given data
+  geom_point(aes(y = Prior)) +
+  geom_line(aes(y = Prior))
+
+likelihoods <- globe %>%
+  ggplot(aes(x = `% Water`)) +
+  
+  # plot likelihoods given data
+  geom_point(aes(y = `Likelihood of % Water Given Data`)) +
+  geom_line(aes(y = `Likelihood of % Water Given Data`))
+
+posteriors <- globe %>%
+  ggplot(aes(x = `% Water`)) +
+  
+  # plot likelihoods given data
+  geom_point(aes(y = `Standardized Posterior`)) +
+  geom_line(aes(y = `Standardized Posterior`))
+
+
+ggpubr::ggarrange(priors, likelihoods, posteriors)
+
+```
+
+We're not seeing much action there for the moment because the prior is 1. The posterior is just the likelihoods now, really. That makes sense...we didn't really give the model any useful information to update on about specific priors before.
+
+We could run it again I guess with the prior that the Earth is no more than 30% water...
+
+```{r}
+
+globe2 <-
+  tibble(
+    #our values of "p", a % surface that is water
+    `% Water` = seq(0,1,length.out = 20), 
+    
+    # our prior, which is the same for every value of p
+    Prior = ifelse(`% Water` < .3, 1, 0),
+    
+    # density of each value of p given the data
+    # this is where we're getting the likelihood of the data under the prior
+    `Likelihood of % Water Given Data` = dbinom(6, 9, `% Water`), 
+    
+    # posterior likelihood of a given value of p
+    # unstandardized first (i.e., values won't sum to 1)
+    `Unstandardized Posterior` = `Likelihood of % Water Given Data` * Prior,
+    
+    # standardize so values of posterior sum to 1
+    `Standardized Posterior` =  `Unstandardized Posterior` / sum(`Unstandardized Posterior`))
+    
+    
+globe2 %>%
+  mutate_all(round, 3) %>%
+  flextable()
+```
+
+
+
+Ok now we are starting to see more of a difference because now we are updating our best guess. Let's plot all this stuff out to see it.
+
+```{r}
+
+priors <- globe2 %>%
+  ggplot(aes(x = `% Water`)) +
+  
+  # plot likelihoods given data
+  geom_point(aes(y = Prior)) +
+  geom_line(aes(y = Prior))
+
+likelihoods <- globe2 %>%
+  ggplot(aes(x = `% Water`)) +
+  
+  # plot likelihoods given data
+  geom_point(aes(y = `Likelihood of % Water Given Data`)) +
+  geom_line(aes(y = `Likelihood of % Water Given Data`))
+
+posteriors <- globe2 %>%
+  ggplot(aes(x = `% Water`)) +
+  
+  # plot likelihoods given data
+  geom_point(aes(y = `Standardized Posterior`)) +
+  geom_line(aes(y = `Standardized Posterior`))
+
+
+ggpubr::ggarrange(priors, likelihoods, posteriors)
+
+
+
+```
+
+So the posteriors are giving the updated "best guess" incorporating the previous best guess information.
+
+> **Posterior (probability)**: The updated plausibility (density) of any specific $p$ given the new data
+
+```{r}
+
+update.globe <- function(num_water_obs, num_land_obs, probability_of_water) {
+  
+  # takes in data and one value representing the prior estimate of % globe that's water (probability_of_water)
+  # returns a value representing the likelihood of probability_of_water given the data
+  
+  posterior <- dbinom(num_water_obs, 
+                      size = num_water_obs + num_land_obs, 
+                      p = probability_of_water)
+  
+  return(posterior)
+  
+}
+
+```
+
+Let's see how it works with the "full" dataset from page 30, across values of $p$ ranging 0-1, by .01.
+
+Here's the third run...
+
+```{r}
+
+tibble(probability_of_water = seq(0,1,by = .01),
+                    density = update.globe(2, 1, probability_of_water)) %>%
+  
+  ggplot(aes(x = probability_of_water, y = density)) +
+  geom_point() +
+  geom_line()
+```
+
+Here's the final run...
+
+```{r}
+
+tibble(probability_of_water = seq(0,1,by = .01),
+                    density = update.globe(6, 3, probability_of_water)) %>%
+  
+  ggplot(aes(x = probability_of_water, y = density)) +
+  geom_point() +
+  geom_line()
+
+```
+
+The densities are basically just counts of the ways you could arrive at 6 water, 3 land observations out of the total number of counts for a given value of $p$. So the density is really a likelihood that some value of $p$ is the "real world" value of $p$ under the assumption that if a given value of $p$ leads to the same data more ways, it's more likely.
+
+And this process of running for specific values of `probability_of_water` is really just grid approximation.
+
+Some terminology is going to be key here...
+
+> **Prior (probability):** The plausibility (density) of a specific value of $p$
+>
+> **Posterior (probability)**: The updated plausibility (density) of any specific $p$ given the new data
+
+# Problem 1
+
+Suppose the globe tossing data (Chapter 2) had turned out to be 4 water and 11 land. Construct the posterior distribution, using grid approximation. Use the same flat prior as in the book.
+
+## Code for the original globe tossing dataset
+
+Let 1 = W, 0 = L
+
+```{r}
+
+data <- c(1,0,1,1,1,0,1,0,1)
+
+```
+
+Initial prior: ??
+
+This is "step 1": tell the story of how these data might arise
+
+Specifically we're starting with a very basic model that states the percentage of Earth's surface that is water. This is "p"
+
+Per the lecture it actually doesn't matter what we choose here, for now
+
+We'll make it 50-50
+
+```{r}
+
+p.initial <- .5
+
+```
+
+Let's write the function that updates p based on one observation.
+
+Here's Bayes's thereom:
+
+$\text{Posterior} = \frac{\text{Probability of the data} * \text{Prior}} {\text{Average probability of the data}}$
+
+Remember that the prior i
+
+```{r}
+
+update <- function(prior, data) {
+ 
+   # the numerator here is the 
+  
+}
+
+```
