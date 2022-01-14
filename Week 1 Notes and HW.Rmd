@@ -179,8 +179,6 @@ globe %>%
 
 What's the difference between the likelihood of a given value of % Earth that's water under the prior, versus the value of the posterior?
 
-
-
 ```{r}
 
 priors <- globe %>%
@@ -240,8 +238,6 @@ globe2 %>%
   flextable()
 ```
 
-
-
 Ok now we are starting to see more of a difference because now we are updating our best guess. Let's plot all this stuff out to see it.
 
 ```{r}
@@ -276,106 +272,168 @@ ggpubr::ggarrange(priors, likelihoods, posteriors)
 
 So the posteriors are giving the updated "best guess" incorporating the previous best guess information.
 
-> **Posterior (probability)**: The updated plausibility (density) of any specific $p$ given the new data
-
-```{r}
-
-update.globe <- function(num_water_obs, num_land_obs, probability_of_water) {
-  
-  # takes in data and one value representing the prior estimate of % globe that's water (probability_of_water)
-  # returns a value representing the likelihood of probability_of_water given the data
-  
-  posterior <- dbinom(num_water_obs, 
-                      size = num_water_obs + num_land_obs, 
-                      p = probability_of_water)
-  
-  return(posterior)
-  
-}
-
-```
-
-Let's see how it works with the "full" dataset from page 30, across values of $p$ ranging 0-1, by .01.
-
-Here's the third run...
-
-```{r}
-
-tibble(probability_of_water = seq(0,1,by = .01),
-                    density = update.globe(2, 1, probability_of_water)) %>%
-  
-  ggplot(aes(x = probability_of_water, y = density)) +
-  geom_point() +
-  geom_line()
-```
-
-Here's the final run...
-
-```{r}
-
-tibble(probability_of_water = seq(0,1,by = .01),
-                    density = update.globe(6, 3, probability_of_water)) %>%
-  
-  ggplot(aes(x = probability_of_water, y = density)) +
-  geom_point() +
-  geom_line()
-
-```
-
-The densities are basically just counts of the ways you could arrive at 6 water, 3 land observations out of the total number of counts for a given value of $p$. So the density is really a likelihood that some value of $p$ is the "real world" value of $p$ under the assumption that if a given value of $p$ leads to the same data more ways, it's more likely.
-
-And this process of running for specific values of `probability_of_water` is really just grid approximation.
-
-Some terminology is going to be key here...
-
-> **Prior (probability):** The plausibility (density) of a specific value of $p$
->
-> **Posterior (probability)**: The updated plausibility (density) of any specific $p$ given the new data
-
 # Problem 1
 
 Suppose the globe tossing data (Chapter 2) had turned out to be 4 water and 11 land. Construct the posterior distribution, using grid approximation. Use the same flat prior as in the book.
 
-## Code for the original globe tossing dataset
-
-Let 1 = W, 0 = L
-
 ```{r}
 
-data <- c(1,0,1,1,1,0,1,0,1)
-
+globe_hw1 <-
+  tibble(
+    #our values of "p", a % surface that is water
+    `% Water` = seq(0,1,length.out = 20), 
+    
+    # our prior, which is the same for every value of p
+    Prior = 1,
+    
+    # density of each value of p given the data
+    # this is where we're getting the likelihood of the data under the prior
+    `Likelihood of % Water Given Data` = dbinom(4, 15, `% Water`), 
+    
+    # posterior likelihood of a given value of p
+    # unstandardized first (i.e., values won't sum to 1)
+    `Unstandardized Posterior` = `Likelihood of % Water Given Data` * Prior,
+    
+    # standardize so values of posterior sum to 1
+    `Standardized Posterior` =  `Unstandardized Posterior` / sum(`Unstandardized Posterior`))
+    
+    
+globe_hw1 %>%
+  mutate_all(round, 3) %>%
+  flextable()
 ```
 
-Initial prior: ??
-
-This is "step 1": tell the story of how these data might arise
-
-Specifically we're starting with a very basic model that states the percentage of Earth's surface that is water. This is "p"
-
-Per the lecture it actually doesn't matter what we choose here, for now
-
-We'll make it 50-50
-
 ```{r}
 
-p.initial <- .5
-
-```
-
-Let's write the function that updates p based on one observation.
-
-Here's Bayes's thereom:
-
-$\text{Posterior} = \frac{\text{Probability of the data} * \text{Prior}} {\text{Average probability of the data}}$
-
-Remember that the prior i
-
-```{r}
-
-update <- function(prior, data) {
- 
-   # the numerator here is the 
+priors <- globe_hw1 %>%
+  ggplot(aes(x = `% Water`)) +
   
-}
+  # plot likelihoods given data
+  geom_point(aes(y = Prior)) +
+  geom_line(aes(y = Prior))
+
+likelihoods <- globe_hw1 %>%
+  ggplot(aes(x = `% Water`)) +
+  
+  # plot likelihoods given data
+  geom_point(aes(y = `Likelihood of % Water Given Data`)) +
+  geom_line(aes(y = `Likelihood of % Water Given Data`))
+
+posteriors <- globe_hw1 %>%
+  ggplot(aes(x = `% Water`)) +
+  
+  # plot likelihoods given data
+  geom_point(aes(y = `Standardized Posterior`)) +
+  geom_line(aes(y = `Standardized Posterior`))
+
+
+ggpubr::ggarrange(priors, likelihoods, posteriors)
+
+
 
 ```
+
+# Problem 2
+
+Now suppose the data are 4 water and 2 land. Compute the posterior\
+again, but this time use a prior that is zero below p = 0.5 and a constant\
+above p = 0.5. This corresponds to prior information that a majority of the\
+Earth's surface is water.
+
+
+```{r}
+
+globe_hw2 <-
+  tibble(
+    #our values of "p", a % surface that is water
+    `% Water` = seq(0,1,length.out = 20), 
+    
+    # our prior, which is the same for every value of p
+    Prior = ifelse(`% Water` > .5, 1, 0),
+    
+    # density of each value of p given the data
+    # this is where we're getting the likelihood of the data under the prior
+    `Likelihood of % Water Given Data` = dbinom(4, 6, `% Water`), 
+    
+    # posterior likelihood of a given value of p
+    # unstandardized first (i.e., values won't sum to 1)
+    `Unstandardized Posterior` = `Likelihood of % Water Given Data` * Prior,
+    
+    # standardize so values of posterior sum to 1
+    `Standardized Posterior` =  `Unstandardized Posterior` / sum(`Unstandardized Posterior`))
+    
+    
+globe_hw2 %>%
+  mutate_all(round, 3) %>%
+  flextable()
+```
+
+```{r}
+
+priors <- globe_hw2 %>%
+  ggplot(aes(x = `% Water`)) +
+  
+  # plot likelihoods given data
+  geom_point(aes(y = Prior)) +
+  geom_line(aes(y = Prior))
+
+likelihoods <- globe_hw2 %>%
+  ggplot(aes(x = `% Water`)) +
+  
+  # plot likelihoods given data
+  geom_point(aes(y = `Likelihood of % Water Given Data`)) +
+  geom_line(aes(y = `Likelihood of % Water Given Data`))
+
+posteriors <- globe_hw2 %>%
+  ggplot(aes(x = `% Water`)) +
+  
+  # plot likelihoods given data
+  geom_point(aes(y = `Standardized Posterior`)) +
+  geom_line(aes(y = `Standardized Posterior`))
+
+
+ggpubr::ggarrange(priors, likelihoods, posteriors)
+
+
+
+```
+
+# HW problem 3
+
+3. For the posterior distribution from 2, compute 89% percentile and HPDI
+intervals. Compare the widths of these intervals. Which is wider? Why? If
+you had only the information in the interval, what might you misunderstand
+about the shape of the posterior distribution?
+
+## 89% percentile
+
+```{r}
+
+globe_hw2 %>%
+  summarise(`5.5%ile` = quantile(`Standardized Posterior`,  .055),
+            `94.5%ile` = quantile(`Standardized Posterior`,  .945))
+            
+```
+
+Again with tidybayes...
+
+```{r}
+
+tidybayes::median_qi(globe_hw2$`Standardized Posterior`, .width = .89)
+
+```
+
+
+## HPDI
+
+This is the 50% span of the posterior with the greatest area under the curve.
+
+```{r}
+
+tidybayes::mode_hdi(globe_hw2$`Standardized Posterior`, .width = .89)
+
+
+```
+
+
+TODO: graph both of these and then see which is wider, and think about why....
