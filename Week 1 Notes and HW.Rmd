@@ -10,6 +10,7 @@ HW at: <https://github.com/rmcelreath/stat_rethinking_2022/blob/main/homework/we
 library(flextable)
 library(tidyverse)
 library(brms)
+library(ggdist)
 
 ```
 
@@ -340,13 +341,12 @@ again, but this time use a prior that is zero below p = 0.5 and a constant\
 above p = 0.5. This corresponds to prior information that a majority of the\
 Earth's surface is water.
 
-
 ```{r}
 
 globe_hw2 <-
   tibble(
     #our values of "p", a % surface that is water
-    `% Water` = seq(0,1,length.out = 20), 
+    `% Water` = seq(0,1,length.out = 1000), 
     
     # our prior, which is the same for every value of p
     Prior = ifelse(`% Water` > .5, 1, 0),
@@ -400,40 +400,101 @@ ggpubr::ggarrange(priors, likelihoods, posteriors)
 
 # HW problem 3
 
-3. For the posterior distribution from 2, compute 89% percentile and HPDI
-intervals. Compare the widths of these intervals. Which is wider? Why? If
-you had only the information in the interval, what might you misunderstand
-about the shape of the posterior distribution?
-
-## 89% percentile
+3.  For the posterior distribution from 2, compute 89% percentile and HPDI intervals. Compare the widths of these intervals. Which is wider? Why? If you had only the information in the interval, what might you misunderstand about the shape of the posterior distribution?
 
 ```{r}
 
-globe_hw2 %>%
-  summarise(`5.5%ile` = quantile(`Standardized Posterior`,  .055),
-            `94.5%ile` = quantile(`Standardized Posterior`,  .945))
-            
+globe_hw3 <-
+  tibble(
+    #our values of "p", a % surface that is water
+    `% Water` = seq(0,1,length.out = 1000), 
+    
+    # our prior, which is the same for every value of p
+    Prior = c(rep(0,500), rep(1,500)),
+    
+    # density of each value of p given the data
+    # this is where we're getting the likelihood of the data under the prior
+    `Likelihood of % Water Given Data` = dbinom(4, 6, `% Water`), 
+    
+    # posterior likelihood of a given value of p
+    # unstandardized first (i.e., values won't sum to 1)
+    `Unstandardized Posterior` = `Likelihood of % Water Given Data` * Prior,
+    
+    # standardize so values of posterior sum to 1
+    `Standardized Posterior` =  `Unstandardized Posterior` / sum(`Unstandardized Posterior`))
+    
+    
+globe_hw3 %>%
+  mutate_all(round, 3) %>%
+  flextable()
 ```
 
-Again with tidybayes...
+We can grab the values using the approach from <https://bookdown.org/content/4857/sampling-the-imaginary.html#intervals-of-defined-mass.>
+
+### Sample from the distribution
+
+We are now sampling from the distribution, weighted by the standardized posterior. So we should have lots of data from the most likely values of % water.
 
 ```{r}
 
-tidybayes::median_qi(globe_hw2$`Standardized Posterior`, .width = .89)
+globe_hw3.sample <-
+  globe_hw3 %>%
+  slice_sample(n = 10000, weight_by = `Standardized Posterior`, replace = T)
+
 
 ```
 
+Check that the above is the case...it does indeed appear that we have more samples from the distribution where % water is most likely...
 
-## HPDI
+```{r}
+globe_hw3.sample %>%
+  ggplot(aes(x = `% Water`)) +
+  xlim(0, 1) +
+  geom_histogram()
+```
 
-This is the 50% span of the posterior with the greatest area under the curve.
+This should roughly match what the distribution of the % water under the posterior looks like...
 
 ```{r}
 
-tidybayes::mode_hdi(globe_hw2$`Standardized Posterior`, .width = .89)
+globe_hw3 %>%
+  ggplot(aes(x = `% Water`, y = `Standardized Posterior`)) +
+  geom_line()
+```
 
+Yep!
+
+## Compute intervals
+
+We're sampling from the samples...
+
+### Median
+
+```{r}
+
+globe_hw3.sample %>%
+  median_qi(`% Water`, .width = .89) %>%
+  mutate(across(is.numeric, round, 3)) %>%
+  pander::pander()
 
 ```
 
+Width is .879 - .525 = .354
 
-TODO: graph both of these and then see which is wider, and think about why....
+### HDI
+
+```{r}
+
+globe_hw3.sample %>%
+  mode_hdi(`% Water`, .width = .89) %>%
+  mutate(across(is.numeric, round, 3)) %>%
+  pander::pander()
+```
+
+.841 - .501 = .34
+
+Makes sense....HDI is going to grab the biggest possible 89% area under the curve so fewer X values will be in there.
+
+The result is slightly numerically different from what McElreath gets, I think just due to using different sampling algorithms and seeds, the but the overall takeaway is the same.
+
+(HW solution: <https://github.com/rmcelreath/stat_rethinking_2022/blob/main/homework/week01_solutions.pdf>)
