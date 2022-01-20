@@ -1,0 +1,185 @@
+---
+title: "Notes and HW 2"
+output: html_notebook
+---
+
+HW at: <https://github.com/rmcelreath/stat_rethinking_2022/blob/main/homework/week02.pdf>
+
+```{r}
+#library(rethinking)
+library(flextable)
+library(tidyverse)
+library(brms)
+library(ggdist)
+```
+
+# Problem 1
+
+**Construct a linear regression of weight as predicted by height, using the adults (age 18 or greater) from the Howell1 dataset. The heights listed below were recorded in the !Kung census, but weights were not recorded for these individuals. Provide predicted weights and 89% compatibility intervals for each of these individuals. That is, fill in the table below, using model-based predictions.**
+
+| Individual | height | expected wt | 89% interval |     |
+|------------|--------|-------------|--------------|-----|
+| 1          | 140    |             |              |     |
+| 2          | 160    |             |              |     |
+| 3          | 175    |             |              |     |
+
+### Read in data
+
+```{r}
+
+howell1 <- read_delim("~/Documents/GitHub/rethinking/data/Howell1.csv") %>%
+  filter(age >= 18) %>%
+  mutate(`Height Mean Centered` = height - mean(height))
+
+
+```
+
+# Explore
+
+So first of all, I'm curious just to use good old lm() regression here to see what happens
+
+```{r}
+
+lm.fit <- lm(weight ~ `Height Mean Centered`, data = howell1)
+
+jtools::summ(lm.fit)
+```
+
+Alrighty, so to do this [McElreath's way](https://speakerdeck.com/rmcelreath/statistical-rethinking-2022-lecture-03?slide=25), we've got to complete five steps in order...
+
+1.  Specify question/goal/estimand
+2.  Specify scientific model
+3.  Specify statistical model
+4.  Validate model
+5.  Analyze data
+
+### Specify question
+
+We'd like to know how weight is associated with height in adults.
+
+### Scientific model
+
+We're going to assume that in adults (who've grown to their max height), height causes weight. So our DAG is:
+
+$$
+\text{Height}➙\text{Weight}
+$$
+
+This is the same thing as saying weight is a function of height, $\text{Weight} = f(\text{Height})$
+
+The linear model we're going to fit to these data is specified like so:
+
+$$
+y_i = \text{Normal}(\mu_i, \sigma) \\
+\mu_i = \alpha + \beta x_i 
+$$
+
+We call $\mu_i$ the **expectation**....it is the weight we expect given a height value. So another way of expressing the value of $\mu$ is
+
+$$
+E(y|x) = \mu 
+$$
+
+"The expected value of weight, given a value of height, is $\mu$.
+
+### Statistical (generative) model
+
+We've specified a scientific model, that weight is a linear function of height.
+
+We need to do some other stuff to make this a generative statistical model (generative in that it generates predictions). Specifically what we need is to put in some priors for our other model parameters. So let's do that (we'll skip to the reasonable priors that McElreath lands on...)
+
+$$
+\text{Weight}_i = \text{Normal}(\mu_i, \sigma) \\
+\mu_i = \alpha + \beta (\overline{\text{Height}} - \text{Height}_i) \\
+\alpha \text{ ~ } \text{Normal}(60,10) \\
+\beta \text{ ~ } \text{Normal}(0,10) \\
+\sigma \text{ ~ } \text{Uniform}(0,10) \\
+
+$$
+
+Let's use simulation and plotting to visualize our priors first...
+
+```{r}
+
+data.1 <- tibble(
+  run = c(1:10000),
+  alpha = rnorm(n = 10000, mean = 60, sd = 10),
+  beta = rnorm(n = 10000, mean = 0, sd = 10),
+  sigma = runif(n = 10000, min = 0, max = 10)
+)
+
+data.1 %>%
+  pivot_longer(cols = everything()) %>%
+  ggplot(aes(x = value)) +
+  geom_histogram() +
+  facet_wrap(vars(name), scales = "free")
+
+
+
+```
+
+Cool, that looks about right based on what we specified. We can see we'll have negative values of beta half the time, which is clearly not a good prior based on what we already know about height and weight. But let's not worry about that for now.
+
+If we wanted to sample from the simulated prior parameter values, here's what we'd get for regression lines...
+
+```{r}
+
+set.seed(1)
+data.1 %>%
+  # grab 10 simulated values of each parameter
+  slice_sample(n = 10) %>%
+  
+  ggplot(group = run) +
+  geom_abline(aes(slope = beta, intercept = alpha)) +
+  scale_x_continuous(limits=c(0,30)) + 
+  scale_y_continuous(limits=c(20, 80)) +
+  xlab("Height Minus Mean Height") +
+  ylab("Weight")
+
+
+
+```
+
+Yeah, so we're seeing a whole bunch of negative lines. It's a bad prior for $\beta$.
+
+We could use a log normal distribution of $\beta$ instead to keep those values positive...
+
+$$
+\beta = \text{LogNormal}(0,1)
+$$
+
+Let's see what that looks like in simulation...
+
+```{r}
+
+data.2 <- tibble(
+  alpha = rnorm(n = 10000, mean = 60, sd = 10),
+  beta = rlnorm(n = 10000, meanlog = 0,sdlog = 1),
+  sigma = runif(n = 10000, min = 0, max = 10)
+)
+
+data.2 %>%
+  pivot_longer(cols = everything()) %>%
+  ggplot(aes(x = value)) +
+  geom_histogram() +
+  facet_wrap(vars(name), scales = "free")
+```
+
+Great, that looks much better for $\beta$. And some implied slopes...
+
+```{r}
+
+set.seed(1)
+data.2 %>%
+  # grab 10 simulated values of each parameter
+  slice_sample(n = 10) %>%
+  
+  ggplot(group = run) +
+  geom_abline(aes(slope = beta, intercept = alpha)) +
+  scale_x_continuous(limits=c(0,30)) + 
+  scale_y_continuous(limits=c(20, 80)) +
+  xlab("Height Minus Mean Height") +
+  ylab("Weight")
+```
+
+Now we're cooking.
