@@ -87,11 +87,15 @@ We've specified a scientific model, that weight is a linear function of height.
 
 We need to do some other stuff to make this a generative statistical model (generative in that it generates predictions). Specifically what we need is to put in some priors for our other model parameters. So let's do that (we'll skip to the reasonable priors that McElreath lands on...)
 
-\$\$ \text{Weight}\_i = \text{Normal}(\mu\_i, \sigma) \\ \mu\_i = \alpha + \beta (\overline{\text{Height}} - \text{Height}\_i) \\ \alpha \\text{ \~ } \text{Normal}(60,10) \\ \beta \\text{ \~ } \text{Normal}(0,10) \\ \sigma \\text{ \~ } \text{Uniform}(0,10) \\
+$$
+\text{Weight}_i = \text{Normal}(\mu_i, \sigma)  \\
+\mu_i = \alpha + \beta (\overline{\text{Height}} - \text{Height}_i) \\
+\alpha \text{ ~ } \text{Normal}(60,10) \\
+\beta \text{~} \text{Normal}(0,10) \\
+\sigma \text{ ~ } \text{Uniform}(0,10)
+$$
 
-\$\$
-
-Let's use simulation and plotting to visualize our priors first...
+Let's use simulation and plotting to visualize our priors first…
 
 ```{r}
 
@@ -201,7 +205,9 @@ test_cases %>%
 
 ```
 
-McElreath fits the model with quadratic approximation but let's just skip right to MCMC with brms (via https://bookdown.org/content/4857/geocentric-models.html#finding-the-posterior-distribution.)
+
+
+McElreath fits the model with quadratic approximation but let's just skip right to MCMC with brms (via <https://bookdown.org/content/4857/geocentric-models.html#finding-the-posterior-distribution>.)
 
 ```{r}
 
@@ -218,6 +224,7 @@ model1.fit <- brms::brm(weight ~ 1 + height_mean_centered, # intercept and heigh
       warmup = 27000,
       cores = 4
           )
+
 
 
 ```
