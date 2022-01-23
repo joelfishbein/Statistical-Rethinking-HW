@@ -193,10 +193,10 @@ set.seed(1)
 
 test_cases <-
   tibble(
-    height = runif(100, 130, 170),
-    height_mean_centered = height - mean(height),
-    weight = rnorm(n = 100,
-                  mean = (intercept + slope*(height_mean_centered))))
+    weight = runif(100, 130, 170),
+    weight_mean_centered = weight - mean(weight),
+    height = rnorm(n = 100,
+                  mean = (intercept + slope*(weight_mean_centered))))
                     
                     
 test_cases %>%
@@ -209,27 +209,39 @@ test_cases %>%
 
 McElreath fits the model with quadratic approximation but let's just skip right to MCMC with brms (via <https://bookdown.org/content/4857/geocentric-models.html#finding-the-posterior-distribution>.)
 
+### Time consuming to run this!
+
 ```{r}
 
-model1.fit <- brms::brm(weight ~ 1 + height_mean_centered, # intercept and height on the right side
-          data = test_cases, 
-          prior = c(prior(normal(178, 20), class = Intercept),
-                prior(lognormal(0, 1), class = b),
-                prior(uniform(0, 50), class = sigma)),
-      seed = 4,
-      file = here::here('brms fits','HW 2 Model 1'),
-      
-      # iterations, warmup = ?, info re running the model
-      iter = 28000,
-      warmup = 27000,
-      cores = 4
-          )
+# model1.fit <- brms::brm(weight ~ 1 + height_mean_centered, # intercept and height on the right side
+#           data = test_cases, 
+#           prior = c(prior(normal(178, 20), class = Intercept),
+#                 prior(lognormal(0, 1), class = b),
+#                 prior(uniform(0, 50), class = sigma)),
+#       seed = 4,
+#       file = here::here('brms fits','HW 2 Model 1'),
+#       
+#       # iterations, warmup = ?, info re running the model
+#       iter = 28000,
+#       warmup = 27000,
+#       cores = 4
+#           )
 
+model1.fit <- read_rds(here::here('brms fits','HW 2 Model 1.rds'))
 
+```
+
+## Let's check out the model's predictions...
+
+```{r}
+
+brms::prior_summary(model1.fit)
 
 ```
 
 ```{r}
-plot(model1.fit)
+broom.mixed::tidy(model1.fit) %>%
+  mutate(across(is.numeric, round, 2)) %>%
+  flextable::flextable()
 
 ```
