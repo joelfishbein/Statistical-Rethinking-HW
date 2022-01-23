@@ -336,10 +336,8 @@ ggpubr::ggarrange(priors, likelihoods, posteriors)
 
 # Problem 2
 
-Now suppose the data are 4 water and 2 land. Compute the posterior\
-again, but this time use a prior that is zero below p = 0.5 and a constant\
-above p = 0.5. This corresponds to prior information that a majority of the\
-Earth's surface is water.
+Now suppose the data are 4 water and 2 land. Compute the posterior
+again, but this time use a prior that is zero below p = 0.5 and a constant above p = 0.5. This corresponds to prior information that a majority of the Earth's surface is water.
 
 ```{r}
 
