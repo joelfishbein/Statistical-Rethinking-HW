@@ -7,11 +7,9 @@ HW at: <https://github.com/rmcelreath/stat_rethinking_2022/blob/main/homework/we
 
 ```{r}
 #library(rethinking)
-library(flextable)
 library(tidyverse)
 library(brms)
 library(ggdist)
-library(brms)
 ```
 
 # Problem 1
@@ -215,7 +213,7 @@ model1.fit <- brms::brm(weight ~ 1 + height_mean_centered, # intercept and heigh
       seed = 4,
       file = here::here('brms fits','HW 2 Model 1'),
       
-      # iterations, warmpup = ?, info re running the model
+      # iterations, warmup = ?, info re running the model
       iter = 28000,
       warmup = 27000,
       cores = 4
