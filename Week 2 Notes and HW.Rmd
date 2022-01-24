@@ -183,7 +183,51 @@ data.2 %>%
 
 Now we're cooking.
 
-We need to validate the model on some data, so let's run the model....
+# Run the model
+
+## Grid expansion
+
+### Intercept only
+
+It'd be nice to see it via grid expansion actually, just to make sure we understand what it's doing.
+
+For grid expansion we basically want to specify different values of each parameter, get all their combinations using ```grid_expand``` and then, using the priors, assign a probability to each. Then we'll update the probability.
+
+It'd be easier actually to start without the height prediction, so that all we're doing is predicting weight with an intercept. So here's those priors.
+
+$$
+\text{Weight}_i = \text{Normal}(\mu_i, \sigma)  \\
+\mu_i = \alpha  \\
+\alpha \text{ ~ } \text{Normal}(60,10) \\
+\sigma \text{ ~ } \text{Uniform}(0,10)
+$$
+Let's set up the grid. McElreath does this on page 103 of the pdf, which is page 89 of the book. I'll do it in tidyverse though.
+
+```{r}
+
+weight_values <-
+  tibble(
+    value = seq(40, 80, .1),
+    probability = dnorm(value, mean = 60, sd = 10))
+
+```
+
+Check that this looks right, indeed it does...
+
+```{r}
+
+weight_values %>%
+  ggplot(aes(x = value, y = probability)) +
+  geom_point() +
+  geom_line()
+  
+
+```
+
+Now we need to feed in some data and use a Bayesian updating function to recompute probabilities. This
+
+
+## MCMC with brms
 
 McElreath fits the model with quadratic approximation but let's just skip right to MCMC with brms (via <https://bookdown.org/content/4857/geocentric-models.html#finding-the-posterior-distribution>.)
 
