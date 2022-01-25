@@ -26,7 +26,7 @@ library(ggdist)
 
 ```{r}
 
-howell1 <- read_delim("~/Documents/GitHub/rethinking/data/Howell1.csv") %>%
+howell1 <- read_delim(here::here('data','howell1.csv')) %>%
   filter(age >= 18) %>%
   mutate(height_mean_centered = height - mean(height),
          weight_mean_centered = weight - mean(weight))
@@ -252,11 +252,110 @@ weight_values %>%
 
 ```
 
-Now we need to feed in some data and use a Bayesian updating function to recompute probabilities. This
+Now we need to feed in some data and use a Bayesian updating function to recompute probabilities. Code copied from https://bookdown.org/content/4857/geocentric-models.html#finding-the-posterior-distribution.
+
+```{r}
+n <- 200
+
+d_grid <-
+  # we'll accomplish with `tidyr::crossing()` what McElreath did with base R `expand.grid()`
+  crossing(mu    = seq(from = 140, to = 160, length.out = n),
+           sigma = seq(from = 4, to = 9, length.out = n))
+
+glimpse(d_grid)
+
+```
+
+
+
+It's 40k values because we're doing a row for every value of $\mu$ with every value of $\sigma$.
+
+Next we write the Bayesian updating function:
+
+```{r}
+
+grid_function <- function(mu, sigma) {
+  
+  dnorm(howell1$height, mean = mu, sd = sigma, log = T) %>% 
+    sum()
+  
+}
+
+
+```
+
+Let's see what this function actually does. Recal we're working with distributions. We are looking at a possible distributon where mu = 147 and sigma = 5. This function tells us the likelihood of the values of height under that assumption. Then, it sums all the likelihoods. So what is returned is the combined likelihood under this distribution.
+
+```{r}
+
+grid_function(mu = 147, sigma = 5)
+
+
+```
+
+We could cheat and look at the actual mean and sd of height, and put those in, and likelihood should increase.
+
+```{r}
+howell1 %>%
+  summarize(mean = mean(height),
+                sd = sd(height))
+
+grid_function(mu = 154.59, sigma = 7.74)
+```
+And we could give it very unlikely values of mu and sigma and likelihood should decrease...
+
+```{r}
+grid_function(mu = 120, sigma = 2)
+```
+
+
+Now compute the posterior...
+
+```{r}
+d_grid <-
+  
+  d_grid %>% 
+  
+  # for a given value of mu and sigma, compute the likelihood of an observed value of height 
+  mutate(log_likelihood = map2_dbl(mu, sigma, grid_function)) %>% 
+  
+  # get the probabilities of each value of mu and sigma under the prior
+  mutate(prior_mu    = dnorm(mu, mean = 178, sd = 20, log = T),
+         prior_sigma = dunif(sigma, min = 0, max = 50, log = T)) %>%
+  
+  # Bayesian equation computation to update the likelihood of 
+  mutate(product = log_likelihood + prior_mu + prior_sigma) %>% 
+  mutate(probability = exp(product - max(product)))
+
+skimr::skim(d_grid)
+```
+
+And plot some samples to see the result...
+
+```{r}
+set.seed(4)
+
+d_grid_samples <- 
+  d_grid %>% 
+  # sample 5000 points
+  sample_n(size = 20000, replace = T, weight = probability)
+
+d_grid_samples %>% 
+  ggplot(aes(x = mu, y = sigma)) + 
+  geom_point(size = .9, alpha = 1/15) +
+  labs(x = expression(mu[samples]),
+       y = expression(sigma[samples])) +
+  theme(panel.grid = element_blank())
+
+
+```
+
+So the highest likelihoods 
 
 ## MCMC with brms
 
 McElreath fits the model with quadratic approximation but let's just skip right to MCMC with brms (via <https://bookdown.org/content/4857/geocentric-models.html#finding-the-posterior-distribution>.)
+
 
 ### Time consuming to run this!
 
