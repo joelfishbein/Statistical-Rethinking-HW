@@ -96,7 +96,7 @@ $$
 \sigma \text{ ~ } \text{Uniform}(0,10)
 $$
 
-Let's use simulation and plotting to visualize our priors first…
+Let's use simulation and plotting to visualize our priors first...
 
 ```{r}
 
@@ -183,6 +183,11 @@ data.2 %>%
 
 Now we're cooking.
 
+A quick reminder here from McElreath on the model fitting procedure in Bayesian analysis:
+
+> We want our Bayesian machine to consider every possible distribution, each defined by a combination of $\mu$ and $\sigma$, and rank them by posterior plausibility. Posterior plausibility provides a measure of the logical compatibility of each possible distribution with the data and model. In practice we'll use approximations to the formal analysis...the thing to worry about is keeping in mind that the "estimate" here will be the entire posterior distribution, not any point within it. And as a result, the posterior distribution will be a distribution of Gaussian distributions.
+
+
 # Run the model
 
 ## Grid expansion
@@ -191,26 +196,49 @@ Now we're cooking.
 
 It'd be nice to see it via grid expansion actually, just to make sure we understand what it's doing.
 
-For grid expansion we basically want to specify different values of each parameter, get all their combinations using ```grid_expand``` and then, using the priors, assign a probability to each. Then we'll update the probability.
+For grid expansion we basically want to specify different values of each parameter, get all their combinations using `grid_expand` and then, using the priors, assign a probability to each. Then we'll update the probability.
 
 It'd be easier actually to start without the height prediction, so that all we're doing is predicting weight with an intercept. So here's those priors.
 
 $$
-\text{Weight}_i = \text{Normal}(\mu_i, \sigma)  \\
+\text{Height}_i = \text{Normal}(\mu_i, \sigma)  \\
 \mu_i = \alpha  \\
-\alpha \text{ ~ } \text{Normal}(60,10) \\
+\alpha \text{ ~ } \text{Normal}(178,20) \\
 \sigma \text{ ~ } \text{Uniform}(0,10)
-$$
+$$ 
+
+
 Let's set up the grid. McElreath does this on page 103 of the pdf, which is page 89 of the book. I'll do it in tidyverse though.
+
+First we simulate 1000 values for the priors, and then simulate values of height based on the priors.
 
 ```{r}
 
-weight_values <-
+set.seed(1)
+
+height.prior <-
   tibble(
-    value = seq(40, 80, .1),
-    probability = dnorm(value, mean = 60, sd = 10))
+    mu = rnorm(1000, mean = 178, sd = 20), # simulate values of mu
+    sigma = runif(1000, min = 0, max = 50), # simulate values of sigma
+    prior_height = rnorm(1000, mean = mu, sd = sigma)) %>% # compute a value based on a given combo of mus and sigmas 
+
+  pivot_longer(cols = everything())
+```
+
+Graph it...
+
+```{r}
+
+height.prior %>%
+  ggplot(aes(value)) +
+  geom_density()+
+  facet_wrap(vars(name), scales = "free")
 
 ```
+Think more about the ```prior_height``` plot. On the x axis, we have values of height. On the y axis, we have the density of that value. So this is the prior probability of given heights, given the priors. We haven't showed the model any data yet though.
+
+
+
 
 Check that this looks right, indeed it does...
 
@@ -225,7 +253,6 @@ weight_values %>%
 ```
 
 Now we need to feed in some data and use a Bayesian updating function to recompute probabilities. This
-
 
 ## MCMC with brms
 
@@ -282,6 +309,7 @@ lm(weight ~ height_mean_centered, data = howell1) %>%
 
 
 ```
+
 Yep, real close.
 
 TODO: review how the Bayesian model actually obtained these estimates...
@@ -316,4 +344,3 @@ model1.fit %>%
   ylim(42, 48)
 
 ```
-
